@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import shutil
 from typing import Dict, List, Optional, Tuple
 import math
 
@@ -35,20 +36,15 @@ def ensure_tesseract_cmd(explicit_cmd: Optional[str]) -> None:
 			pytesseract.pytesseract.tesseract_cmd = candidate
 			return
 
-	# Linux/macOS: try typical binary names/locations before falling back to PATH
-	linux_candidates: List[str] = [
-		"/usr/bin/tesseract",
-		"/usr/local/bin/tesseract",
-		"tesseract",
-	]
-	for candidate in linux_candidates:
-		# If it's an absolute path, check it exists; otherwise set name and let subprocess resolve PATH
-		if os.path.isabs(candidate):
-			if os.path.isfile(candidate):
-				pytesseract.pytesseract.tesseract_cmd = candidate
-				return
-		else:
-			# As a last resort, set the command name; pytesseract will attempt PATH lookup
+	# Linux/macOS: prefer PATH discovery first
+	which_path = shutil.which("tesseract")
+	if which_path:
+		pytesseract.pytesseract.tesseract_cmd = which_path
+		return
+
+	# Fallback to typical absolute paths
+	for candidate in ("/usr/bin/tesseract", "/usr/local/bin/tesseract"):
+		if os.path.isfile(candidate):
 			pytesseract.pytesseract.tesseract_cmd = candidate
 			return
 
