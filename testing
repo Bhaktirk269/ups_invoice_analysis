@@ -1,0 +1,8 @@
+python invoice_ocr.py --pdf ups_invoice.pdf --ref 19114
+
+curl "http://localhost:8000/extract?pdf_path=ups_invoice.pdf&ref=18789"
+
+curl.exe -F "ref=18789" -F "pdf=@ups_invoice.pdf" http://localhost:8000/extract
+
+
+
