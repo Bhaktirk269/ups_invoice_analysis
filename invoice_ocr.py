@@ -19,6 +19,12 @@ def ensure_tesseract_cmd(explicit_cmd: Optional[str]) -> None:
 		pytesseract.pytesseract.tesseract_cmd = explicit_cmd
 		return
 
+	# Allow overriding via environment variable
+	env_cmd = os.getenv("TESSERACT_CMD")
+	if env_cmd and os.path.isfile(env_cmd):
+		pytesseract.pytesseract.tesseract_cmd = env_cmd
+		return
+
 	common_windows_paths: List[str] = [
 		r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
 		r"C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe",
@@ -26,6 +32,23 @@ def ensure_tesseract_cmd(explicit_cmd: Optional[str]) -> None:
 
 	for candidate in common_windows_paths:
 		if os.path.isfile(candidate):
+			pytesseract.pytesseract.tesseract_cmd = candidate
+			return
+
+	# Linux/macOS: try typical binary names/locations before falling back to PATH
+	linux_candidates: List[str] = [
+		"/usr/bin/tesseract",
+		"/usr/local/bin/tesseract",
+		"tesseract",
+	]
+	for candidate in linux_candidates:
+		# If it's an absolute path, check it exists; otherwise set name and let subprocess resolve PATH
+		if os.path.isabs(candidate):
+			if os.path.isfile(candidate):
+				pytesseract.pytesseract.tesseract_cmd = candidate
+				return
+		else:
+			# As a last resort, set the command name; pytesseract will attempt PATH lookup
 			pytesseract.pytesseract.tesseract_cmd = candidate
 			return
 
