@@ -804,18 +804,8 @@ def process_pdf_for_reference(
 			context_lines = extract_context(lines, idx, window=context_window)
 			key_values = extract_key_values_from_lines(context_lines)
 			fields = extract_ups_structured_fields(context_lines)
-			requested = {
-				"weight_container": None,
-				"reference_no_1": None,
-				"reference_no_2": lines[idx]["text"],
-				"tracking_no": None,
-				"shipment_no": None,
-				"description": fields.get("service"),
-				"net_charges": None,
-				"freight": None,
-				"fuel_surcharge": None,
-				"total_charges_for_shipment": None,
-			}
+			# Use the same text-based extraction heuristics to populate requested fields
+			requested = extract_requested_fields(lines, idx, reference)
 			fields.pop("sender", None)
 			fields.pop("consignee", None)
 			key_values = {k: v for k, v in key_values.items() if k.lower() not in ("sender", "consignee")}
