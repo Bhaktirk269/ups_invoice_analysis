@@ -10,6 +10,22 @@ from invoice_ocr import process_pdf_for_reference, ensure_tesseract_cmd
 app = FastAPI(title="UPS Invoice OCR API", version="1.0.0")
 
 
+@app.get("/")
+def root():
+
+	return {
+		"message": "UPS Invoice OCR API",
+		"docs": "/docs",
+		"endpoints": {
+			"GET /health": "Service health check",
+			"GET /extract": "Query params: pdf_path, ref, [tesseract_cmd, scale, lang, context]",
+			"POST /extract": "Form fields: ref, pdf(@file), [tesseract_cmd, scale, lang, context]",
+			"GET /ups/by-ref/{ref}": "Convenience: uses ups_invoice.pdf by default",
+			"GET /fedex/by-ref/{ref}": "Convenience: uses ups_invoice.pdf by default",
+		},
+	}
+
+
 @app.get("/health")
 def health():
 
@@ -74,4 +90,55 @@ async def extract_post(
 		except Exception:
 			pass
 
+
+
+@app.get("/ups/by-ref/{ref}")
+def ups_by_ref(
+	ref: str,
+	pdf: Optional[str] = None,
+	tesseract_cmd: Optional[str] = None,
+	scale: float = 2.0,
+	lang: str = "eng",
+	context: int = 2,
+):
+
+	pdf_path = pdf or "ups_invoice.pdf"
+	if not os.path.isfile(pdf_path):
+		raise HTTPException(status_code=400, detail=f"PDF not found: {pdf_path}")
+	ensure_tesseract_cmd(tesseract_cmd)
+	result = process_pdf_for_reference(
+		pdf_path=pdf_path,
+		reference=ref,
+		tesseract_cmd=tesseract_cmd,
+		scale=scale,
+		lang=lang,
+		context_window=context,
+	)
+	return JSONResponse(content=result)
+
+
+@app.get("/fedex/by-ref/{ref}")
+def fedex_by_ref(
+	ref: str,
+	pdf: Optional[str] = None,
+	tesseract_cmd: Optional[str] = None,
+	scale: float = 2.0,
+	lang: str = "eng",
+	context: int = 2,
+):
+
+	# For now, reuse the same OCR logic and default PDF. Adjust if a FedEx-specific parser is added.
+	pdf_path = pdf or "ups_invoice.pdf"
+	if not os.path.isfile(pdf_path):
+		raise HTTPException(status_code=400, detail=f"PDF not found: {pdf_path}")
+	ensure_tesseract_cmd(tesseract_cmd)
+	result = process_pdf_for_reference(
+		pdf_path=pdf_path,
+		reference=ref,
+		tesseract_cmd=tesseract_cmd,
+		scale=scale,
+		lang=lang,
+		context_window=context,
+	)
+	return JSONResponse(content=result)
 
