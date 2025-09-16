@@ -5,6 +5,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
 
 from invoice_ocr import process_pdf_for_reference, ensure_tesseract_cmd
+import pytesseract  # type: ignore
 
 
 app = FastAPI(title="UPS Invoice OCR API", version="1.0.0")
@@ -90,6 +91,23 @@ async def extract_post(
 		except Exception:
 			pass
 
+
+@app.get("/diag/tesseract")
+def diag_tesseract():
+
+	cmd = getattr(pytesseract.pytesseract, "tesseract_cmd", "tesseract")
+	try:
+		version = str(pytesseract.get_tesseract_version())
+	except Exception:
+		version = None
+	return {"tesseract_cmd": cmd, "version": version}
+
+
+@app.get("/diag/check-pdf")
+def diag_check_pdf(pdf: str = "ups_invoice.pdf"):
+
+	exists = os.path.isfile(pdf)
+	return {"pdf": pdf, "exists": exists, "cwd": os.getcwd()}
 
 
 @app.get("/ups/by-ref/{ref}")
