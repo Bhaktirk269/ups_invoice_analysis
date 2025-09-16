@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
 
-from invoice_ocr import process_pdf_for_reference, ensure_tesseract_cmd
 import pytesseract  # type: ignore
 
 
