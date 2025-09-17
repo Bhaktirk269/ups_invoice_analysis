@@ -103,6 +103,98 @@ def extract_pdf_text_lines(pdf_path: str) -> List[List[Dict]]:
 	return pages_lines
 
 
+def _line_contains_reference_cue(text: str) -> bool:
+
+	return bool(re.search(r"reference\s*no\.?\s*\d*", text, re.IGNORECASE))
+
+
+def _guess_reference_from_line(text: str) -> Optional[str]:
+
+	# Heuristic: pick the longest alphanumeric token (3-30 chars) that isn't a keyword
+	tokens = re.findall(r"[A-Za-z0-9#]+", text)
+	ignore = {"reference", "no", "ref", "number", "shipment"}
+	candidates = [t for t in tokens if 3 <= len(t) <= 30 and t.lower() not in ignore]
+	return max(candidates, key=len) if candidates else None
+
+
+def process_pdf_all_shipments(
+	pdf_path: str,
+	tesseract_cmd: Optional[str] = None,
+	scale: float = 2.0,
+	lang: str = "eng",
+	context_window: int = 2,
+) -> Dict:
+
+	# Build lines using OCR if available, else embedded text fallback
+	ensure_tesseract_cmd(tesseract_cmd)
+	use_ocr = is_tesseract_available()
+	pages: List[List[Dict]]
+	page_images: List[Image.Image] = []
+	if use_ocr:
+		images = render_pdf_to_images(pdf_path, scale=scale)
+		for_ocr_pages: List[List[Dict]] = []
+		for pil_image in images:
+			processed = preprocess_image_for_ocr(pil_image)
+			data = ocr_image_to_data(processed, lang=lang)
+			lines = build_lines_from_tesseract_data(data)
+			for ln in lines:
+				ln["_page_image_bin"] = processed
+				ln["_page_image_raw"] = pil_image
+			for_ocr_pages.append(lines)
+			page_images.append(pil_image)
+		pages = for_ocr_pages
+	else:
+		pages = extract_pdf_text_lines(pdf_path)
+
+	shipments: List[Dict] = []
+	seen: set = set()
+	for page_number, lines in enumerate(pages, start=1):
+		# Candidate anchors: lines mentioning Reference No, or lines containing tracking numbers
+		for idx, ln in enumerate(lines):
+			text = ln.get("text", "")
+			is_ref_anchor = _line_contains_reference_cue(text)
+			tracking_present = bool(re.search(r"\b1Z[0-9A-Z]{10,}\b", text))
+			weight_present = bool(re.search(r"\b\d+(?:\.\d+)?\s*/\s*\d+(?:\.\d+)?(?:\s*[Cc])?\b", text))
+			if not (is_ref_anchor or tracking_present or weight_present):
+				continue
+
+			# Guess a local reference to drive the row extractor heuristics
+			guessed_ref = _guess_reference_from_line(text) or "REF"
+			context_lines = extract_context(lines, idx, window=context_window)
+			key_values = extract_key_values_from_lines(context_lines)
+			fields = extract_ups_structured_fields(context_lines)
+			requested = extract_requested_fields(lines, idx, guessed_ref)
+			fields.pop("sender", None)
+			fields.pop("consignee", None)
+			key_values = {k: v for k, v in key_values.items() if k.lower() not in ("sender", "consignee")}
+
+			# Deduplicate using key info
+			k = (
+				requested.get("tracking_no"),
+				requested.get("shipment_no"),
+				requested.get("reference_no_2"),
+				page_number,
+				text,
+			)
+			if k in seen:
+				continue
+			seen.add(k)
+
+			shipments.append(
+				{
+					"page": page_number,
+					"matched_line": text,
+					"requested": requested,
+					"key_values": key_values,
+				}
+			)
+
+	return {
+		"pdf": os.path.abspath(pdf_path),
+		"shipments": shipments,
+	}
+
+
 def preprocess_image_for_ocr(pil_image: Image.Image) -> Image.Image:
 
 	image_array = np.array(pil_image)
