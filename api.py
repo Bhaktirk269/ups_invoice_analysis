@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from invoice_ocr import process_pdf_for_reference, ensure_tesseract_cmd
 import pytesseract  # type: ignore
+from invoice_ocr import process_pdf_all_shipments
 
 
 app = FastAPI(title="UPS Invoice OCR API", version="1.0.0")
@@ -134,6 +135,65 @@ def ups_by_ref(
 	)
 	return JSONResponse(content=result)
 
+
+@app.get("/ups/extract-all")
+def ups_extract_all_get(
+	pdf: str = "ups_invoice.pdf",
+	tesseract_cmd: Optional[str] = None,
+	scale: float = 2.0,
+	lang: str = "eng",
+	context: int = 2,
+):
+
+	if not os.path.isfile(pdf):
+		raise HTTPException(status_code=400, detail=f"PDF not found: {pdf}")
+	ensure_tesseract_cmd(tesseract_cmd)
+	result = process_pdf_all_shipments(
+		pdf_path=pdf,
+		tesseract_cmd=tesseract_cmd,
+		scale=scale,
+		lang=lang,
+		context_window=context,
+	)
+	return JSONResponse(content=result)
+
+
+@app.post("/ups/extract-all")
+async def ups_extract_all_post(
+	pdf: UploadFile = File(...),
+	tesseract_cmd: Optional[str] = Form(None),
+	scale: float = Form(2.0),
+	lang: str = Form("eng"),
+	context: int = Form(2),
+):
+
+	try:
+		data = await pdf.read()
+	except Exception as e:
+		raise HTTPException(status_code=400, detail=f"Failed to read upload: {e}")
+	if not data:
+		raise HTTPException(status_code=400, detail="Empty file upload")
+
+	filename = pdf.filename or "uploaded.pdf"
+	tmp_path = os.path.join(".", f"_upload_{os.getpid()}_{filename}")
+	with open(tmp_path, "wb") as f:
+		f.write(data)
+
+	try:
+		ensure_tesseract_cmd(tesseract_cmd)
+		result = process_pdf_all_shipments(
+			pdf_path=tmp_path,
+			tesseract_cmd=tesseract_cmd,
+			scale=scale,
+			lang=lang,
+			context_window=context,
+		)
+		return JSONResponse(content=result)
+	finally:
+		try:
+			os.remove(tmp_path)
+		except Exception:
+			pass
 
 @app.get("/fedex/by-ref/{ref}")
 def fedex_by_ref(
