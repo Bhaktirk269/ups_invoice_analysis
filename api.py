@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from invoice_ocr import process_pdf_for_reference, ensure_tesseract_cmd
 import pytesseract  # type: ignore
@@ -10,6 +11,15 @@ from invoice_ocr import process_pdf_all_shipments
 
 
 app = FastAPI(title="UPS Invoice OCR API", version="1.0.0")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific domains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
